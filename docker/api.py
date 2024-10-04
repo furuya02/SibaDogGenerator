@@ -1,18 +1,20 @@
 import glob
-import time
 import os
-import torch
 import random
+import time
+import torch
 from fastapi import FastAPI, Response
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from diffusers import AutoPipelineForText2Image
+from fastapi.responses import FileResponse
 
-base_path = "/home"
-output_path = "/output"
+BASE_PATH = "/home"
+OUTPUT_PATH = "output"
 
 
-def generateData(
+# 画像を生成し、指定されたファイル名で保存する
+def generate_data(
     pipe,
     prompt,
     seed,
@@ -35,21 +37,23 @@ pipe = AutoPipelineForText2Image.from_pretrained(
 )
 pipe.to("cuda")
 
-prompt = "dmy"
-output_filename = "/tmp/dmy.png"
-seed = random.randint(1, 10000)
-step = 1
+# ダミー画像生成のためのパラメータ
+PROPMPT = "dmy"
+OUTPUT_FILENAME = "/tmp/dmy.png"
+SEED = random.randint(1, 10000)
+STEPS = 1
 
-generateData(
+# ダミー画像を生成
+generate_data(
     pipe,
-    prompt,
-    seed,
-    step,
-    output_filename,
+    PROPMPT,
+    SEED,
+    STEPS,
+    OUTPUT_FILENAME,
 )
 
 app = FastAPI()
-app.add_middleware(  # CORS
+app.add_middleware(  # CORS設定
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
@@ -64,48 +68,54 @@ class Params(BaseModel):
     seed: int
 
 
+# 画像生成のエンドポイント
 @app.post("/generate")
 async def generate(params: Params):
-    prompt = "{}".format(params.prompt)
-    t = int(time.time() * 1000)
-    output_filename = "{}/{}/{}.png".format(base_path, output_path, t)
+    prompt = params.prompt
+    timestamp = int(time.time() * 1000)
+    output_filename = f"{BASE_PATH}/{OUTPUT_PATH}/{timestamp}.png"
     seed = random.randint(1, 10000) if params.seed == -1 else params.seed
     steps = params.steps
-    print("steps:{} seed:{}".format(steps, seed))
-    generateData(
+
+    # 画像を生成
+    generate_data(
         pipe,
         prompt,
         seed,
         steps,
         output_filename,
     )
-    output_filename = "{}/{}/{}.png".format(base_path, output_path, t)
-    url = "{}/{}.png".format(output_path, t)
-    return {"url": url}
+
+    # 生成された画像のURLを返す
+    url_path = f"/{OUTPUT_PATH}/{timestamp}.png"
+    return {"url": url_path}
 
 
+# 出力ディレクトリ内のすべてのPNGファイルを削除するエンドポイント
 @app.get("/clear")
-async def clear():
-    path = "{}{}/*.png".format(base_path, output_path)
-    print("clear path:{}".format(path))
-    for p in glob.glob(path, recursive=True):
-        print(p)
-        if os.path.isfile(p):
-            os.remove(p)
+async def clear_output_directory():
+    png_files = glob.glob(f"{OUTPUT_PATH}/*.png", recursive=True)
+    for png_file in png_files:
+        try:
+            os.remove(png_file)
+        except Exception as e:
+            print(f"Error deleting file {png_file}: {e}")
     return {"status": "OK"}
 
 
+# 出力ディレクトリ内のすべてのPNGファイルを取得するエンドポイント
 @app.get("/fetch")
-async def fetch():
-    file_names = glob.glob("output/*.png")
-    list = []
-    for file in file_names:
-        list.append("{}".format(file))
-    list.sort(reverse=True)
-    return {"list": list}
+async def fetch_images():
+    png_files = glob.glob(f"{OUTPUT_PATH}/*.png", recursive=True)
+    file_list = [f"{png_file}" for png_file in png_files]
+    return {"list": file_list}
 
 
+# 指定されたファイル名の出力ファイルを取得するエンドポイント
 @app.get("/output/{filename}")
-async def read_item(filename):
-    with open("{}/{}/{}".format(base_path, output_path, filename), "rb") as f:
-        return Response(content=f.read(), media_type="image/png")
+async def get_output_file(filename):
+    file_path = f"{BASE_PATH}/{OUTPUT_PATH}/{filename}"
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type="image/png")
+    else:
+        return {"error": "File not found"}

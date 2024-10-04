@@ -14,15 +14,18 @@ const style = {
   p: 4,
 };
 
+interface ModalViewProps {
+  modalDialog: boolean;
+  setModalDialog: Dispatch<React.SetStateAction<boolean>>;
+  src: string;
+}
+
 export default function ModalView({
   modalDialog,
   setModalDialog,
   src,
-}: {
-  modalDialog: boolean;
-  setModalDialog: Dispatch<React.SetStateAction<boolean>>;
-  src: string;
-}) {
+}: ModalViewProps) {
+  // モーダルを閉じるハンドラー
   function handleClose() {
     setModalDialog(false);
   }

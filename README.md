@@ -27,7 +27,7 @@ $ docker build -t api:latest .
 
 $ docker images
 REPOSITORY                       TAG       IMAGE ID       CREATED         SIZE
-api              latest    cb0ea864400c   9 minutes ago   16.4GB
+api          latest    c0141269cd02   10 seconds ago   14.9GB
 ```
 
 ### 起動

@@ -6,15 +6,15 @@ import {
 } from "@mui/material";
 import { Params } from "../App";
 
-function InputView({
-  params,
-  handleSetParams,
-}: {
+interface InputViewProps {
   params: Params;
   handleSetParams: (params: Params) => void;
-}) {
+}
+
+function InputView({ params, handleSetParams }: InputViewProps) {
   return (
     <>
+      {/* プロンプト入力フィールド */}
       <TextField
         label="Propmt"
         value={params.prompt}
@@ -30,17 +30,19 @@ function InputView({
         justifyContent="start"
         spacing={2}
       >
+        {/* 写真・アニメ選択トグルボタン */}
         <ToggleButtonGroup
           color="primary"
           value={params.dataType}
           exclusive
-          onChange={(_e, v) => {
-            handleSetParams({ ...params, dataType: v });
+          onChange={(_e, value) => {
+            handleSetParams({ ...params, dataType: value });
           }}
         >
           <ToggleButton value="photo">Photo</ToggleButton>
           <ToggleButton value="anime">Anime</ToggleButton>
         </ToggleButtonGroup>
+        {/* ステップ数入力フィールド */}
         <TextField
           label="Steps"
           type="number"
@@ -54,6 +56,7 @@ function InputView({
             handleSetParams({ ...params, steps: parseInt(e.target.value) });
           }}
         />
+        {/* シード値入力フィールド */}
         <TextField
           label="Seed"
           type="number"

@@ -1,10 +1,7 @@
+import axios from "axios";
 import React, { Dispatch, useEffect, useState } from "react";
 import {
-  TranslateClient,
-  TranslateTextCommand,
-} from "@aws-sdk/client-translate";
-import "./App.css";
-import {
+  Alert,
   AppBar,
   Button,
   FormControlLabel,
@@ -17,18 +14,23 @@ import {
 } from "@mui/material";
 import LoadingButton from "@mui/lab/LoadingButton";
 import BuildIcon from "@mui/icons-material/Build";
-import axios from "axios";
 import InputView from "./view/InputView";
 import ComfirmView from "./view/ConfirmView";
 import ModalView from "./view/ModalView";
+import {
+  TranslateClient,
+  TranslateTextCommand,
+} from "@aws-sdk/client-translate";
 
-const host = "http://192.168.1.31:8000";
+const HOST = "http://192.168.1.31:8000";
 
 export type ItemData = {
   url: string;
   title: string;
 };
+
 export type DataType = "photo" | "anime";
+
 export type Params = {
   prompt: string;
   dataType: DataType;
@@ -36,23 +38,23 @@ export type Params = {
   seed: number;
 };
 
+// データをフェッチする関数
 const fetchData = async (
   setItemData: Dispatch<React.SetStateAction<ItemData[]>>
 ) => {
-  const url = `${host}/fetch`;
+  const url = `${HOST}/fetch`;
   const response = await axios.get(url);
   if (response.data.list) {
-    const newItemData: ItemData[] = [];
-    response.data.list.forEach((data: string) => {
-      const url = `${host}/${data}`;
-      console.log(data);
-      newItemData.push({ url: url, title: "Breakfast" });
+    const newItemData: ItemData[] = response.data.list.map((data: string) => {
+      const fileUrl = `${HOST}/${data}`;
+      return { url: fileUrl, title: "Breakfast" };
     });
     setItemData(newItemData);
   }
 };
 
-const translate = async (prompt: string) => {
+// プロンプトを翻訳する関数
+const translatePrompt = async (prompt: string): Promise<string | undefined> => {
   // .env にAWSの認証情報を設定してください
   const client = new TranslateClient({
     region: process.env.REACT_APP_AWS_REGION,
@@ -72,35 +74,43 @@ const translate = async (prompt: string) => {
     const response = await client.send(command);
     return response.TranslatedText;
   } catch (error) {
-    console.error(error);
+    console.error("Translation error:", error);
+    return undefined;
   }
-  return "";
 };
 
+// 画像を生成する関数
 const generateData = async (
   params: Params,
   itemData: ItemData[],
   setItemData: Dispatch<React.SetStateAction<ItemData[]>>,
-  setLoading: Dispatch<React.SetStateAction<boolean>>
+  setLoading: Dispatch<React.SetStateAction<boolean>>,
+  setCredentialsError: Dispatch<React.SetStateAction<boolean>>
 ): Promise<ItemData[]> => {
   setLoading(true);
 
-  const promptEn = await translate(params.prompt);
+  let promptEn: string | undefined = params.prompt;
+  setCredentialsError(false);
+  if (params.prompt) {
+    promptEn = await translatePrompt(params.prompt);
+    if (!promptEn) {
+      setCredentialsError(true);
+    }
+  }
 
   const prompt = `(a Shiba Dog , kawaii), ${promptEn}, ${params.dataType}`;
 
-  const url = `${host}/generate`;
+  const url = `${HOST}/generate`;
   const data = {
     prompt: prompt,
     seed: params.seed,
     steps: params.steps,
   };
-  console.log(`data:  ${JSON.stringify(data)}`);
   const response = await axios.post(url, data);
-  console.log(`response:  ${JSON.stringify(response.data)}`);
   const newItemData = [...itemData];
+
   if (response.data.url) {
-    const url = `${host}${response.data.url}`;
+    const url = `${HOST}${response.data.url}`;
     newItemData.unshift({ url: url, title: "Breakfast" });
     setItemData(newItemData);
   }
@@ -108,29 +118,26 @@ const generateData = async (
   return newItemData;
 };
 
-const clearData = async (
+// 全ての画像を削除する関数
+const handleClearData = async (
   setItemData: Dispatch<React.SetStateAction<ItemData[]>>
 ) => {
-  const url = `${host}/clear`;
+  const url = `${HOST}/clear`;
   const response = await axios.get(url);
   if (response.data.status === "OK") {
     setItemData([]);
   }
 };
 
+// setIntervalの中から画像を生成する時に参照するためのグローバル変数
 declare global {
   var auto: boolean;
   var timer: NodeJS.Timer | null;
-  var params: Params;
+  var params: Params | undefined;
 }
 global.auto = false;
 global.timer = null;
-global.params = {
-  prompt: "",
-  dataType: "photo",
-  steps: 0,
-  seed: 0,
-};
+global.params = undefined;
 
 function App() {
   const [itemData, setItemData] = useState<ItemData[]>([]);
@@ -141,11 +148,13 @@ function App() {
     steps: 1,
     seed: -1,
   });
+  global.params = params; // グローバル変数の初期化
   const [confirmDialog, setConfirmDialog] = useState<boolean>(false);
   const [modalDialog, setModalDialog] = useState<boolean>(false);
   const [previewImage, setPreviewImage] = useState<string>("");
   const [autoGenerate, setAutoGenerate] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [credentialsError, setCredentialsError] = useState<boolean>(false);
 
   useEffect(() => {
     fetchData(setItemData);
@@ -160,12 +169,13 @@ function App() {
     if (global.auto) {
       let newItemData = [...itemData];
       global.timer = setInterval(async () => {
-        let newParams = { ...global.params };
+        const newParams = { ...global.params } as Params;
         newItemData = await generateData(
           newParams,
           newItemData,
           setItemData,
-          setLoading
+          setLoading,
+          setCredentialsError
         );
       }, 3000);
     } else {
@@ -175,6 +185,7 @@ function App() {
 
   function handleSetParams(params: Params) {
     setParams(params);
+    // グローバル変数も盲信する
     global.params = params;
   }
 
@@ -187,6 +198,16 @@ function App() {
           </Typography>
         </Toolbar>
       </AppBar>
+      {credentialsError ? (
+        <>
+          <Alert variant="filled" severity="error">
+            .env に認証情報が設定されているか確認してください
+          </Alert>
+        </>
+      ) : (
+        <>NONE</>
+      )}
+
       <Stack
         mt={2}
         ml={5}
@@ -215,7 +236,13 @@ function App() {
 
           <LoadingButton
             onClick={() =>
-              generateData(params, itemData, setItemData, setLoading)
+              generateData(
+                params,
+                itemData,
+                setItemData,
+                setLoading,
+                setCredentialsError
+              )
             }
             endIcon={<BuildIcon />}
             loading={loading}
@@ -240,7 +267,7 @@ function App() {
       <ComfirmView
         confirmDialog={confirmDialog}
         setConfirmDialog={setConfirmDialog}
-        clearData={() => clearData(setItemData)}
+        clearData={() => handleClearData(setItemData)}
       />
       <ModalView
         modalDialog={modalDialog}
