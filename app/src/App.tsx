@@ -205,7 +205,7 @@ function App() {
           </Alert>
         </>
       ) : (
-        <>NONE</>
+        <></>
       )}
 
       <Stack
