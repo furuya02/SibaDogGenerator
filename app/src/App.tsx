@@ -185,7 +185,7 @@ function App() {
 
   function handleSetParams(params: Params) {
     setParams(params);
-    // グローバル変数も盲信する
+    // グローバル変数も更新する
     global.params = params;
   }
 
